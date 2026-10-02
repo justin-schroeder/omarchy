@@ -17,14 +17,16 @@
     if [[ $(cat "$device/vendor") == "0x14e4" && $(cat "$device/device") == "0x43ba" &&
       $(cat "$device/subsystem_vendor") == "0x106b" && $(cat "$device/subsystem_device") == "0x015a" ]]; then
       firmware_dir=/usr/lib/firmware/brcm
+      updates_dir=/usr/lib/firmware/updates/brcm
       target="$firmware_dir/brcmfmac43602-pcie.Apple Inc.-MacBookPro13,3.txt"
       # Respect administrator and package-provided NVRAM, including compressed
-      # files and symlinks. Reapplying hardware setup must preserve the MAC.
-      for existing in "$target" "$target.zst" "$target.xz" \
-        "$firmware_dir/brcmfmac43602-pcie.txt"{,.zst,.xz}; do
-        if [[ -e $existing || -L $existing ]]; then
-          return 0
-        fi
+      # files, symlinks and updates/. Reapplying hardware setup must preserve the MAC.
+      for dir in "$updates_dir" "$firmware_dir"; do
+        for existing in "$dir/${target##*/}"{,.zst,.xz} "$dir/brcmfmac43602-pcie.txt"{,.zst,.xz}; do
+          if [[ -e $existing || -L $existing ]]; then
+            return 0
+          fi
+        done
       done
 
       scratch=$(mktemp -d)

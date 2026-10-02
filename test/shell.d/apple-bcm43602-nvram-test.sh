@@ -21,13 +21,14 @@ with tempfile.TemporaryDirectory() as tmp:
     base = Path(tmp)
     def run_case(name, *, vendor="Apple Inc.", model="MacBookPro13,3", chip="0x43ba",
                  subsystem="0x015a", mac="00:90:4c:0d:f4:3e", existing=None,
-                 corrupt=False, download_fail=False):
+                 existing_in="firmware", corrupt=False, download_fail=False):
         case = base / name
         dmi = case / "sys/class/dmi/id"
         pci = case / "sys/bus/pci/devices/0000:03:00.0"
         firmware = case / "firmware"
+        updates = case / "updates"
         stub = case / "bin"
-        for path in (dmi, pci, firmware, stub):
+        for path in (dmi, pci, firmware, updates, stub):
             path.mkdir(parents=True)
         (dmi / "sys_vendor").write_text(vendor)
         (dmi / "product_name").write_text(model)
@@ -39,7 +40,7 @@ with tempfile.TemporaryDirectory() as tmp:
             (pci / "net/wlan0/address").write_text(mac)
         target = firmware / "brcmfmac43602-pcie.Apple Inc.-MacBookPro13,3.txt"
         if existing:
-            (firmware / existing).write_text("keep custom configuration")
+            (case / existing_in / existing).write_text("keep custom configuration")
         payload = case / "payload"
         payload.write_bytes(b"corrupt" if corrupt else fixture)
         curl = stub / "curl"
@@ -49,6 +50,7 @@ with tempfile.TemporaryDirectory() as tmp:
         curl.chmod(0o755)
         script = case / "leaf.sh"
         script.write_text(source.replace("/sys/", str(case / "sys") + "/")
+                          .replace("/usr/lib/firmware/updates/brcm", str(updates))
                           .replace("/usr/lib/firmware/brcm", str(firmware))
                           .replace("b109f3e6663b0e888c2559e36f7e0109f2a3a6b9765786d11f849f16d4b32d06",
                                    hashlib.sha256(fixture).hexdigest()))
@@ -67,13 +69,15 @@ with tempfile.TemporaryDirectory() as tmp:
         assert result.returncode == 0 and not target.exists() and not (case / "calls").exists(), name
         print("ok - skips " + name)
 
-    for suffix in (".txt", ".txt.zst", ".txt.xz"):
-        for prefix in ("brcmfmac43602-pcie", "brcmfmac43602-pcie.Apple Inc.-MacBookPro13,3"):
-            filename = prefix + suffix
-            case, target, result, _ = run_case("existing-" + filename, existing=filename)
-            assert result.returncode == 0 and not (case / "calls").exists()
-            assert (target.parent / filename).read_text() == "keep custom configuration"
-    print("ok - preserves generic and model-specific NVRAM, including compressed files")
+    for existing_in in ("firmware", "updates"):
+        for suffix in (".txt", ".txt.zst", ".txt.xz"):
+            for prefix in ("brcmfmac43602-pcie", "brcmfmac43602-pcie.Apple Inc.-MacBookPro13,3"):
+                filename = prefix + suffix
+                case, target, result, _ = run_case("existing-" + existing_in + "-" + filename,
+                                                   existing=filename, existing_in=existing_in)
+                assert result.returncode == 0 and not (case / "calls").exists()
+                assert (case / existing_in / filename).read_text() == "keep custom configuration"
+    print("ok - preserves generic and model-specific NVRAM, including compressed files and updates/")
 
     case, target, result, invoke = run_case("install")
     assert result.returncode == 0, result.stderr
