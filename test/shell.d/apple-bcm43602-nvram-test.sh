@@ -93,7 +93,8 @@ with tempfile.TemporaryDirectory() as tmp:
     assert result.returncode == 0 and "macaddr=02:" in target.read_text()
     print("ok - handles installation without a bound network interface")
     for name, kwargs in [("bad-digest", dict(corrupt=True)), ("download-failure", dict(download_fail=True))]:
-        _, target, result, _ = run_case(name, **kwargs)
-        assert result.returncode != 0 and not target.exists(), name
-        print("ok - refuses installation on " + name)
+        case, target, result, _ = run_case(name, **kwargs)
+        assert result.returncode == 0 and not target.exists() and (case / "calls").exists(), name
+        assert "skipping" in result.stdout, name
+        print("ok - skips installation without failing hardware setup on " + name)
 PYTEST

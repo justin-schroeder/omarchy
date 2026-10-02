@@ -29,10 +29,15 @@
 
       scratch=$(mktemp -d)
       trap 'rm -rf "$scratch"' EXIT
-      curl --fail --silent --show-error --location --retry 2 --connect-timeout 10 --max-time 60 \
+      # A failure here would stop every hardware leaf after this one, so skip
+      # the board file instead: an offline install keeps the stock firmware.
+      if ! curl --fail --silent --show-error --location --retry 2 --connect-timeout 10 --max-time 60 \
         https://gist.githubusercontent.com/MikeRatcliffe/9614c16a8ea09731a9d5e91685bd8c80/raw/bd7af7c6f01df3ccee1471d36cb8df15d618a6aa/brcmfmac43602-pcie.txt \
-        -o "$scratch/nvram"
-      echo "b109f3e6663b0e888c2559e36f7e0109f2a3a6b9765786d11f849f16d4b32d06  $scratch/nvram" | sha256sum --check --status
+        -o "$scratch/nvram" ||
+        ! echo "b109f3e6663b0e888c2559e36f7e0109f2a3a6b9765786d11f849f16d4b32d06  $scratch/nvram" | sha256sum --check --status; then
+        echo "Could not fetch verified MacBookPro13,3 BCM43602 board NVRAM; skipping"
+        return 0
+      fi
 
       # The stock firmware can report a shared Broadcom placeholder address.
       # Use a per-install locally administered unicast MAC in that case, or
